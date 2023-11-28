@@ -77,6 +77,12 @@ extension LocationPickerWrapper {
         )
         
         navigationController?.navigationBar.tintColor = .label
+        
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithDefaultBackground()
+        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+        navigationController?.navigationBar.scrollEdgeAppearance = appearance
+        navigationController?.navigationBar.standardAppearance = appearance
     }
 }
 
