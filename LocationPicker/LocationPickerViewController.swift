@@ -259,9 +259,7 @@ open class LocationPickerViewController: UIViewController {
 
     func selectLocation(location: CLLocation) {
         // add point annotation to map
-        let annotation = MKPointAnnotation()
-        annotation.coordinate = location.coordinate
-        mapView.addAnnotation(annotation)
+        let annotation = MapPinAnnotationView.add(to: mapView, coordinate: location.coordinate)
 
         geocoder.cancelGeocode()
         geocoder.reverseGeocodeLocation(location) { response, error in
@@ -377,12 +375,8 @@ extension LocationPickerViewController: MKMapViewDelegate {
 	public func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
 		if annotation is MKUserLocation { return nil }
 		
-		let pin = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "annotation")
-        if #available(iOS 9.0, *) {
-            pin.pinTintColor = .green
-        } else {
-            pin.pinColor = .green
-        }
+        let pin = MKPinAnnotationView(annotation: annotation, reuseIdentifier: MapPinAnnotationView.reuseIdentifier)
+        pin.image = MapPinAnnotationView.pinImage
 		// drop only on long press gesture
 		let fromLongPress = annotation is MKPointAnnotation
 		pin.animatesDrop = fromLongPress
@@ -412,7 +406,7 @@ extension LocationPickerViewController: MKMapViewDelegate {
 	}
 	
 	public func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
-		let pins = mapView.annotations.filter { $0 is MKPinAnnotationView }
+		let pins = mapView.annotations.filter { $0 is MapPinAnnotationView }
 		assert(pins.count <= 1, "Only 1 pin annotation should be on map at a time")
 
         if let userPin = views.first(where: { $0.annotation is MKUserLocation }) {
