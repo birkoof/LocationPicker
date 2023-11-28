@@ -368,13 +368,11 @@ extension LocationPickerViewController: MKMapViewDelegate {
 	public func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
 		if annotation is MKUserLocation { return nil }
 		
-        let pin = MKPinAnnotationView(annotation: annotation, reuseIdentifier: MapPinAnnotationView.reuseIdentifier)
+        let pin = MKAnnotationView(annotation: annotation, reuseIdentifier: MapPinAnnotationView.reuseIdentifier)
         pin.image = MapPinAnnotationView.pinImage
-		// drop only on long press gesture
-		let fromLongPress = annotation is MKPointAnnotation
-		pin.animatesDrop = fromLongPress
+        pin.canShowCallout = true
 		pin.rightCalloutAccessoryView = selectLocationButton()
-		pin.canShowCallout = !fromLongPress
+        
 		return pin
 	}
 	

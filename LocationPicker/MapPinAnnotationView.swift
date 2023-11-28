@@ -17,7 +17,7 @@ final class MapPinAnnotationView: MKPointAnnotation {
         let annotation = MapPinAnnotationView()
         annotation.coordinate = coordinate
         annotation.title = title
-        let pinAnnotation = MKPinAnnotationView(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        let pinAnnotation = MKAnnotationView(annotation: annotation, reuseIdentifier: reuseIdentifier)
         mapView.addAnnotation(pinAnnotation.annotation!)
         return pinAnnotation.annotation!
     }
