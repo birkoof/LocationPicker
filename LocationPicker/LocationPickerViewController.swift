@@ -383,7 +383,7 @@ extension LocationPickerViewController: MKMapViewDelegate {
             let width = titleLabel.textRect(forBounds: CGRect(x: 0, y: 0, width: Int.max, height: 30), limitedToNumberOfLines: 1).width
             button.frame.size = CGSize(width: width, height: 30.0)
         }
-		button.setTitleColor(view.tintColor, for: UIControl.State())
+        button.setTitleColor(.systemBlue, for: UIControl.State())
 		return button
 	}
 	
