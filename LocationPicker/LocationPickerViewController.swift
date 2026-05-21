@@ -43,6 +43,45 @@ open class LocationPickerViewController: UIViewController {
     
     /// default: "Select"
     public var selectButtonTitle = "Select"
+
+    /// default: "Enter coordinates manually"
+    public var manualCoordinatesMenuTitle = "Enter coordinates manually"
+
+    /// default: "Enter Coordinates"
+    public var manualCoordinatesAlertTitle = "Enter Coordinates"
+
+    /// default: "Type latitude and longitude values."
+    public var manualCoordinatesAlertMessage = "Type latitude and longitude values."
+
+    /// default: "Latitude"
+    public var manualCoordinatesLatitudePlaceholder = "Latitude"
+
+    /// default: "Longitude"
+    public var manualCoordinatesLongitudePlaceholder = "Longitude"
+
+    /// default: "Save"
+    public var manualCoordinatesSaveButtonTitle = "Save"
+
+    /// default: "Cancel"
+    public var manualCoordinatesCancelButtonTitle = "Cancel"
+
+    /// default: "Invalid Coordinates"
+    public var manualCoordinatesValidationErrorTitle = "Invalid Coordinates"
+
+    /// default: "Please enter both latitude and longitude."
+    public var manualCoordinatesMissingValuesErrorMessage = "Please enter both latitude and longitude."
+
+    /// default: "Latitude and longitude must be valid numbers."
+    public var manualCoordinatesInvalidNumberErrorMessage = "Latitude and longitude must be valid numbers."
+
+    /// default: "Latitude must be between -90 and 90."
+    public var manualCoordinatesLatitudeRangeErrorMessage = "Latitude must be between -90 and 90."
+
+    /// default: "Longitude must be between -180 and 180."
+    public var manualCoordinatesLongitudeRangeErrorMessage = "Longitude must be between -180 and 180."
+
+    /// default: "OK"
+    public var manualCoordinatesValidationErrorButtonTitle = "OK"
 	
 	public lazy var currentLocationButtonBackground: UIColor = {
 		if let navigationBar = self.navigationController?.navigationBar,
@@ -142,8 +181,8 @@ open class LocationPickerViewController: UIViewController {
 		}
 	}
 	
-	open override func viewDidLoad() {
-		super.viewDidLoad()
+    open override func viewDidLoad() {
+        super.viewDidLoad()
         		
 		locationManager.delegate = self
 		mapView.delegate = self
@@ -163,7 +202,7 @@ open class LocationPickerViewController: UIViewController {
             // http://stackoverflow.com/questions/32675001/uisearchcontroller-warning-attempting-to-load-the-view-of-a-view-controller/
             _ = searchController.view
         }
-		definesPresentationContext = true
+        definesPresentationContext = true
 		
 		// user location
 		mapView.userTrackingMode = .none
@@ -178,7 +217,7 @@ open class LocationPickerViewController: UIViewController {
         // Resign first responder to avoid the search bar disappearing issue
         searchController.isActive = false
     }
-    
+
 	open override var preferredStatusBarStyle : UIStatusBarStyle {
 		return statusBarStyle
 	}
@@ -250,27 +289,176 @@ open class LocationPickerViewController: UIViewController {
 		mapView.setRegion(region, animated: animated)
 	}
 
-    func selectLocation(location: CLLocation) {
+    func selectLocation(location: CLLocation, addToHistory: Bool = false) {
         // add point annotation to map
-        let annotation = MapPinAnnotationView.add(to: mapView, coordinate: location.coordinate)
+        _ = MapPinAnnotationView.add(to: mapView, coordinate: location.coordinate)
 
         geocoder.cancelGeocode()
-        geocoder.reverseGeocodeLocation(location) { response, error in
-            if let error = error as NSError?, error.code != 10 { // ignore cancelGeocode errors
-                // show error and remove annotation
-                let alert = UIAlertController(title: nil, message: error.localizedDescription, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .cancel, handler: { _ in }))
-                self.present(alert, animated: true) {
-                    self.mapView.removeAnnotation(annotation)
-                }
-            } else if let placemark = response?.first {
+        geocoder.reverseGeocodeLocation(location) { response, _ in
+            if let placemark = response?.first {
                 // get POI name from placemark if any
                 let name = placemark.areasOfInterest?.first
 
                 // pass user selected location too
-                self.location = Location(name: name, location: location, placemark: placemark)
+                let selectedLocation = Location(name: name, location: location, placemark: placemark)
+                self.location = selectedLocation
+                if addToHistory {
+                    self.historyManager.addToHistory(selectedLocation)
+                }
+            } else {
+                // Geocoding can fail (for example, ocean coordinates). Keep the selected point.
+                let placemark = MKPlacemark(coordinate: location.coordinate)
+                let selectedLocation = Location(name: nil, location: location, placemark: placemark)
+                self.location = selectedLocation
+                if addToHistory {
+                    self.historyManager.addToHistory(selectedLocation)
+                }
             }
         }
+    }
+
+    open func presentManualCoordinatesAlert(
+        latitudeText: String? = nil,
+        longitudeText: String? = nil
+    ) {
+        let alert = UIAlertController(
+            title: manualCoordinatesAlertTitle,
+            message: manualCoordinatesAlertMessage,
+            preferredStyle: .alert
+        )
+
+        alert.addTextField { textField in
+            textField.placeholder = self.manualCoordinatesLatitudePlaceholder
+            textField.keyboardType = .numbersAndPunctuation
+            textField.text = latitudeText
+        }
+        alert.addTextField { textField in
+            textField.placeholder = self.manualCoordinatesLongitudePlaceholder
+            textField.keyboardType = .numbersAndPunctuation
+            textField.text = longitudeText
+        }
+
+        let cancel = UIAlertAction(title: manualCoordinatesCancelButtonTitle, style: .cancel)
+        let save = UIAlertAction(title: manualCoordinatesSaveButtonTitle, style: .default) { [weak self, weak alert] _ in
+            guard let self, let alert else { return }
+            self.handleManualCoordinatesSave(from: alert)
+        }
+        alert.addAction(cancel)
+        alert.addAction(save)
+
+        present(alert, animated: true)
+    }
+
+    func handleManualCoordinatesSave(from alert: UIAlertController) {
+        let latitudeText = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let longitudeText = alert.textFields?.dropFirst().first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        var parsedLatitudeText = latitudeText
+        var parsedLongitudeText = longitudeText
+
+        if let pair = parseCoordinatePair(from: latitudeText) {
+            parsedLatitudeText = String(pair.latitude)
+            parsedLongitudeText = String(pair.longitude)
+        } else if let pair = parseCoordinatePair(from: longitudeText) {
+            parsedLatitudeText = String(pair.latitude)
+            parsedLongitudeText = String(pair.longitude)
+        }
+
+        guard !parsedLatitudeText.isEmpty, !parsedLongitudeText.isEmpty else {
+            showManualCoordinatesValidationError(
+                message: manualCoordinatesMissingValuesErrorMessage,
+                latitudeText: latitudeText,
+                longitudeText: longitudeText
+            )
+            return
+        }
+
+        guard let latitude = parseCoordinate(from: parsedLatitudeText), let longitude = parseCoordinate(from: parsedLongitudeText) else {
+            showManualCoordinatesValidationError(
+                message: manualCoordinatesInvalidNumberErrorMessage,
+                latitudeText: latitudeText,
+                longitudeText: longitudeText
+            )
+            return
+        }
+
+        guard (-90.0...90.0).contains(latitude) else {
+            showManualCoordinatesValidationError(
+                message: manualCoordinatesLatitudeRangeErrorMessage,
+                latitudeText: latitudeText,
+                longitudeText: longitudeText
+            )
+            return
+        }
+
+        guard (-180.0...180.0).contains(longitude) else {
+            showManualCoordinatesValidationError(
+                message: manualCoordinatesLongitudeRangeErrorMessage,
+                latitudeText: latitudeText,
+                longitudeText: longitudeText
+            )
+            return
+        }
+
+        let coordinates = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        let location = CLLocation(latitude: coordinates.latitude, longitude: coordinates.longitude)
+        self.location = nil
+        showCoordinates(coordinates)
+        selectLocation(location: location, addToHistory: true)
+    }
+
+    func showManualCoordinatesValidationError(
+        message: String,
+        latitudeText: String?,
+        longitudeText: String?
+    ) {
+        let alert = UIAlertController(title: manualCoordinatesValidationErrorTitle, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: manualCoordinatesValidationErrorButtonTitle, style: .default) { [weak self] _ in
+            self?.presentManualCoordinatesAlert(latitudeText: latitudeText, longitudeText: longitudeText)
+        })
+        present(alert, animated: true)
+    }
+
+    func parseCoordinatePair(from text: String) -> (latitude: Double, longitude: Double)? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let separators = CharacterSet(charactersIn: "; ")
+        let spaceOrSemicolonComponents = trimmed
+            .components(separatedBy: separators)
+            .filter { !$0.isEmpty }
+        if spaceOrSemicolonComponents.count == 2,
+           let latitude = parseCoordinate(from: spaceOrSemicolonComponents[0]),
+           let longitude = parseCoordinate(from: spaceOrSemicolonComponents[1]) {
+            return (latitude, longitude)
+        }
+
+        let commaComponents = trimmed
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if commaComponents.count == 2,
+           let latitude = parseCoordinate(from: commaComponents[0]),
+           let longitude = parseCoordinate(from: commaComponents[1]) {
+            return (latitude, longitude)
+        }
+
+        return nil
+    }
+
+    func parseCoordinate(from text: String) -> Double? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+
+        let formatter = NumberFormatter()
+        formatter.locale = Locale.current
+        formatter.numberStyle = .decimal
+        if let value = formatter.number(from: normalized)?.doubleValue {
+            return value
+        }
+
+        let fallback = normalized.replacingOccurrences(of: ",", with: ".")
+        return Double(fallback)
     }
 }
 

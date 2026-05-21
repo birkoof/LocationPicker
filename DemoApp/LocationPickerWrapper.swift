@@ -68,13 +68,22 @@ extension LocationPickerWrapper {
                 presentingViewController?.dismiss(animated: true)
             }
         })
-        
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
+
+        let mapButton = UIBarButtonItem(
             image: UIImage(systemName: "map.fill"),
             style: .plain,
             target: self,
             action: #selector(mapButtonPressed)
         )
+        let enterCoordinatesAction = UIAction(title: manualCoordinatesMenuTitle) { [weak self] _ in
+            self?.presentManualCoordinatesAlert()
+        }
+        let manualCoordinatesMenu = UIMenu(title: "", children: [enterCoordinatesAction])
+        let manualCoordinatesButton = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis.circle"),
+            menu: manualCoordinatesMenu
+        )
+        navigationItem.leftBarButtonItems = [mapButton, manualCoordinatesButton]
         
         navigationController?.navigationBar.tintColor = .label
         
