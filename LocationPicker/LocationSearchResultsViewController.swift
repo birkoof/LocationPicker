@@ -12,6 +12,7 @@ import MapKit
 class LocationSearchResultsViewController: UITableViewController {
 	var locations: [Location] = []
 	var onSelectLocation: ((Location) -> ())?
+    var onDeleteLocation: ((Location) -> ())?
 	var isShowingHistory = false
 	var searchHistoryLabel: String?
 	
@@ -22,7 +23,7 @@ class LocationSearchResultsViewController: UITableViewController {
 	
 	override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
 		return isShowingHistory ? searchHistoryLabel : nil
-	}
+    }
 
 	override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
 		return locations.count
@@ -33,7 +34,11 @@ class LocationSearchResultsViewController: UITableViewController {
 			?? UITableViewCell(style: .subtitle, reuseIdentifier: "LocationCell")
 
 		let location = locations[indexPath.row]
-		cell.textLabel?.text = location.name
+        if isShowingHistory {
+            cell.textLabel?.text = location.name ?? location.address
+        } else {
+            cell.textLabel?.text = location.name
+        }
 		cell.detailTextLabel?.text = location.address
 		
 		return cell
@@ -42,4 +47,21 @@ class LocationSearchResultsViewController: UITableViewController {
 	override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
 		onSelectLocation?(locations[indexPath.row])
 	}
+
+    override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard isShowingHistory else { return nil }
+        let deleteAction = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, completion in
+            guard let self else {
+                completion(false)
+                return
+            }
+            let location = self.locations[indexPath.row]
+            self.onDeleteLocation?(location)
+            self.locations.remove(at: indexPath.row)
+            tableView.deleteRows(at: [indexPath], with: .automatic)
+            completion(true)
+        }
+        return UISwipeActionsConfiguration(actions: [deleteAction])
+    }
+
 }

@@ -38,9 +38,9 @@ open class LocationPickerViewController: UIViewController {
 	/// default: "Search or enter an address"
 	public var searchBarPlaceholder = "Search or enter an address"
 	
-	/// default: "Search History"
-	public var searchHistoryLabel = "Search History"
-    
+    /// default: "Search History"
+    public var searchHistoryLabel = "Search History"
+
     /// default: "Select"
     public var selectButtonTitle = "Select"
 
@@ -127,10 +127,14 @@ open class LocationPickerViewController: UIViewController {
 	
 	var mapView: MKMapView!
 	var locationButton: UIButton?
+    private var isAutofillingCoordinateFields = false
 	
 	lazy var results: LocationSearchResultsViewController = {
 		let results = LocationSearchResultsViewController()
 		results.onSelectLocation = { [weak self] in self?.selectedLocation($0) }
+        results.onDeleteLocation = { [weak self] in
+            self?.historyManager.removeFromHistory($0)
+        }
 		results.searchHistoryLabel = self.searchHistoryLabel
 		return results
 	}()
@@ -297,7 +301,8 @@ open class LocationPickerViewController: UIViewController {
         geocoder.reverseGeocodeLocation(location) { response, _ in
             if let placemark = response?.first {
                 // get POI name from placemark if any
-                let name = placemark.areasOfInterest?.first
+                let poiName = placemark.areasOfInterest?.first?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let name = (poiName?.isEmpty == false) ? poiName : self.coordinatesTitle(for: location.coordinate)
 
                 // pass user selected location too
                 let selectedLocation = Location(name: name, location: location, placemark: placemark)
@@ -308,13 +313,18 @@ open class LocationPickerViewController: UIViewController {
             } else {
                 // Geocoding can fail (for example, ocean coordinates). Keep the selected point.
                 let placemark = MKPlacemark(coordinate: location.coordinate)
-                let selectedLocation = Location(name: nil, location: location, placemark: placemark)
+                let name = self.coordinatesTitle(for: location.coordinate)
+                let selectedLocation = Location(name: name, location: location, placemark: placemark)
                 self.location = selectedLocation
                 if addToHistory {
                     self.historyManager.addToHistory(selectedLocation)
                 }
             }
         }
+    }
+
+    func coordinatesTitle(for coordinate: CLLocationCoordinate2D) -> String {
+        return String(format: "%.5f°, %.5f°", coordinate.latitude, coordinate.longitude)
     }
 
     open func presentManualCoordinatesAlert(
@@ -331,11 +341,13 @@ open class LocationPickerViewController: UIViewController {
             textField.placeholder = self.manualCoordinatesLatitudePlaceholder
             textField.keyboardType = .numbersAndPunctuation
             textField.text = latitudeText
+            textField.addTarget(self, action: #selector(self.manualCoordinateFieldDidChange(_:)), for: .editingChanged)
         }
         alert.addTextField { textField in
             textField.placeholder = self.manualCoordinatesLongitudePlaceholder
             textField.keyboardType = .numbersAndPunctuation
             textField.text = longitudeText
+            textField.addTarget(self, action: #selector(self.manualCoordinateFieldDidChange(_:)), for: .editingChanged)
         }
 
         let cancel = UIAlertAction(title: manualCoordinatesCancelButtonTitle, style: .cancel)
@@ -356,10 +368,11 @@ open class LocationPickerViewController: UIViewController {
         var parsedLatitudeText = latitudeText
         var parsedLongitudeText = longitudeText
 
-        if let pair = parseCoordinatePair(from: latitudeText) {
+        // Auto-split only when user likely pasted both coordinates into a single field.
+        if longitudeText.isEmpty, let pair = parseCoordinatePair(from: latitudeText) {
             parsedLatitudeText = String(pair.latitude)
             parsedLongitudeText = String(pair.longitude)
-        } else if let pair = parseCoordinatePair(from: longitudeText) {
+        } else if latitudeText.isEmpty, let pair = parseCoordinatePair(from: longitudeText) {
             parsedLatitudeText = String(pair.latitude)
             parsedLongitudeText = String(pair.longitude)
         }
@@ -402,6 +415,7 @@ open class LocationPickerViewController: UIViewController {
 
         let coordinates = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         let location = CLLocation(latitude: coordinates.latitude, longitude: coordinates.longitude)
+        searchController.isActive = false
         self.location = nil
         showCoordinates(coordinates)
         selectLocation(location: location, addToHistory: true)
@@ -459,6 +473,29 @@ open class LocationPickerViewController: UIViewController {
 
         let fallback = normalized.replacingOccurrences(of: ",", with: ".")
         return Double(fallback)
+    }
+
+    @objc func manualCoordinateFieldDidChange(_ textField: UITextField) {
+        guard !isAutofillingCoordinateFields else { return }
+        guard let alert = presentedViewController as? UIAlertController else { return }
+        guard let textFields = alert.textFields, textFields.count >= 2 else { return }
+
+        let latitudeField = textFields[0]
+        let longitudeField = textFields[1]
+        let latitudeText = latitudeField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let longitudeText = longitudeField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if textField === latitudeField, longitudeText.isEmpty, let pair = parseCoordinatePair(from: latitudeText) {
+            isAutofillingCoordinateFields = true
+            latitudeField.text = String(pair.latitude)
+            longitudeField.text = String(pair.longitude)
+            isAutofillingCoordinateFields = false
+        } else if textField === longitudeField, latitudeText.isEmpty, let pair = parseCoordinatePair(from: longitudeText) {
+            isAutofillingCoordinateFields = true
+            latitudeField.text = String(pair.latitude)
+            longitudeField.text = String(pair.longitude)
+            isAutofillingCoordinateFields = false
+        }
     }
 }
 

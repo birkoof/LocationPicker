@@ -23,14 +23,36 @@ struct SearchHistoryManager {
 		guard let dic = location.toDefaultsDic() else { return }
 		
 		var history  = defaults.object(forKey: HistoryKey) as? [NSDictionary] ?? []
-		let historyNames = history.compactMap { $0[LocationDicKeys.name] as? String }
-        let alreadyInHistory = location.name.flatMap(historyNames.contains) ?? false
+        let target = location.coordinate
+        let duplicateByCoordinates = history.contains { entry in
+            guard let saved = Location.fromDefaultsDic(entry) else { return false }
+            return saved.coordinate.latitude == target.latitude && saved.coordinate.longitude == target.longitude
+        }
+        let historyNames = history.compactMap { $0[LocationDicKeys.name] as? String }
+        let duplicateByName = location.name.flatMap(historyNames.contains) ?? false
+        let alreadyInHistory = duplicateByCoordinates || duplicateByName
 		if !alreadyInHistory {
 			history.insert(dic, at: 0)
 			defaults.set(history, forKey: HistoryKey)
             defaults.synchronize()
 		}
 	}
+
+    func removeFromHistory(_ location: Location) {
+        let target = location.coordinate
+        var history = defaults.object(forKey: HistoryKey) as? [NSDictionary] ?? []
+        history.removeAll { entry in
+            guard let saved = Location.fromDefaultsDic(entry) else { return false }
+            return saved.coordinate.latitude == target.latitude && saved.coordinate.longitude == target.longitude
+        }
+        defaults.set(history, forKey: HistoryKey)
+        defaults.synchronize()
+    }
+
+    func clearHistory() {
+        defaults.removeObject(forKey: HistoryKey)
+        defaults.synchronize()
+    }
 }
 
 struct LocationDicKeys {
